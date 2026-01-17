@@ -15,7 +15,7 @@ A .NET wrapper for the Typst document compiler. Provides safe, high performance 
 
 ## Installation
 ```bash
-dotnet add package Typst.NET
+dotnet add package TypstNET
 ```
 
 **Platform support:**

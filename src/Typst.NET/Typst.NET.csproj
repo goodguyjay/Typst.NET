@@ -6,9 +6,9 @@
         <Nullable>enable</Nullable>
         <IsPackable>true</IsPackable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <PackageId>Typst.NET</PackageId>
-        <Version>1.0.0</Version>
-        <Authors>Jay</Authors>
+        <PackageId>TypstNET</PackageId>
+        <Version>1.0.0-rc1</Version>
+        <Authors>Jair Ramos</Authors>
         <Description>Production-grade .NET bindings for the Typst document compiler with full VFS, package, and font support.</Description>
         <PackageProjectUrl>https://github.com/goodguyjay/Typst.NET</PackageProjectUrl>
         <RepositoryUrl>https://github.com/goodguyjay/Typst.NET</RepositoryUrl>
