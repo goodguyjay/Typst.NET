@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <PackageId>Typst.NET</PackageId>
+        <Version>1.0.0</Version>
+        <Authors>Jay</Authors>
+        <Description>Production-grade .NET bindings for the Typst document compiler with full VFS, package, and font support.</Description>
+        <PackageProjectUrl>https://github.com/goodguyjay/Typst.NET</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/goodguyjay/Typst.NET</RepositoryUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageTags>typst;pdf;document;compiler;markup</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    </PropertyGroup>
+    
+    <!-- Copy native library to output -->
+    <ItemGroup>
+        <None Include="runtimes\**\*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Link>runtimes\%(RecursiveDir)%(Filename)%(Extension)</Link>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+        <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes\" />
+    </ItemGroup>
+
+    <ItemGroup>
+    </ItemGroup>
+    
+</Project>

@@ -1,0 +1,24 @@
+[package]
+name = "typst-net-core"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+typst = "0.14.2"
+typst-kit = { version = "0.14.2", features = ["embed-fonts"] }
+typst-svg = "0.14.2"
+typst-pdf = "0.14.2"
+
+# utilities
+serde_json = "1.0"
+time = { version = "0.3.44", features = ["local-offset"] }
+comemo = "0.5.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

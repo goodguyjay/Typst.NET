@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/tests/Typst.NET.Tests/Typst.NET.Tests.csproj" />
+  <Project Path="src/Typst.NET/Typst.NET.csproj" />
+</Solution>
