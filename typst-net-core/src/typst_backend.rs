@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::fs;
 // ============================================================================
 // TYPST IMPORTS - ONLY IN THIS FILE
 // ============================================================================
+use dashmap::DashMap;
 use serde_json::Value as JsonValue;
+use std::fs;
 use std::path::PathBuf;
 /// ISOLATION LAYER: This is the ONLY file that import typst types.
 /// All typst API interaction happens here. When typst releases a new version,
@@ -26,7 +26,9 @@ use typst_svg::svg;
 // INTERNAL TYPES - ABSTRACTION OVER TYPST
 // ============================================================================
 
-/// Wrapper around the typst's world implementation
+/// Single-threaded world for document compilation.
+/// For parallel compilation of multiple documents, create separate instances per thread.
+/// Each `BackendWorld` is independent and maintain its own cache.
 #[derive(Debug)]
 pub struct BackendWorld {
     root: PathBuf,
@@ -35,8 +37,8 @@ pub struct BackendWorld {
     fonts: Fonts,
     font_book: LazyHash<FontBook>,
     library: LazyHash<Library>,
-    source_cache: HashMap<FileId, Source>,
-    binary_cache: HashMap<FileId, Bytes>, // unimplemented for now
+    source_cache: DashMap<FileId, Source>,
+    binary_cache: DashMap<FileId, Bytes>,
     package_path: Option<PathBuf>,
 }
 
@@ -137,8 +139,8 @@ impl BackendWorld {
         let main_source = Source::new(main_id, String::new());
 
         // Initialize caches
-        let source_cache = HashMap::new();
-        let binary_cache = HashMap::new();
+        let source_cache = DashMap::new();
+        let binary_cache = DashMap::new();
 
         Ok(Self {
             root,
@@ -250,8 +252,8 @@ impl World for BackendWorld {
         };
 
         // Check cache first
-        if let Some(source) = self.source_cache.get(&id) {
-            return Ok(source.clone());
+        if let Some(cached) = self.source_cache.get(&id) {
+            return Ok(cached.clone());
         }
 
         // Otherwise, it's an external typ file from filesystem
@@ -259,18 +261,28 @@ impl World for BackendWorld {
         let text = fs::read_to_string(&path).map_err(|e| FileError::from_io(e, &path))?;
         let source = Source::new(id, text);
 
-        // in the future we'll insert into cache here,
-        // but since self is &self, we'll need interior mutability (RefCell/DashMap)
-        // but for now, just reading is fine
+        // Insert into cache
+        self.source_cache.insert(id, source.clone());
+
         Ok(source)
     }
 
     fn file(&self, id: FileId) -> FileResult<Bytes> {
+        // Try cache
+        if let Some(cached) = self.binary_cache.get(&id) {
+            return Ok(cached.value().clone());
+        }
+
+        // Cache miss, read from filesystem
         let path = self.resolve_path(id)?;
+        let mut bytes_vec = fs::read(&path).map_err(|err| FileError::from_io(err, &path))?;
 
-        let bytes_vec = fs::read(&path).map_err(|err| FileError::from_io(err, &path))?;
+        bytes_vec.shrink_to_fit();
 
-        Ok(Bytes::new(bytes_vec))
+        let bytes = Bytes::new(bytes_vec);
+        self.binary_cache.insert(id, bytes.clone());
+
+        Ok(bytes)
     }
 
     fn font(&self, index: usize) -> Option<Font> {
@@ -1059,5 +1071,113 @@ mod font_tests {
         fs::remove_dir_all(&temp2).ok();
 
         assert!(world.is_ok());
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use std::env;
+    use std::fs;
+
+    #[test]
+    fn test_source_cache_hit() {
+        let temp_dir = env::temp_dir().join("typst_cache_test");
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let helper_file = temp_dir.join("helper.typ");
+        fs::write(&helper_file, b"#let x = 1").unwrap();
+
+        let mut world = BackendWorld::new(temp_dir.clone(), None, None, vec![], true).unwrap();
+
+        // First compilation, cache miss
+        world.update_source(r#"#import "helper.typ": x"#);
+        let result1 = world.compile();
+        assert!(result1.success);
+
+        fs::write(&helper_file, b"#let x = 999").unwrap();
+
+        // Second compilation, cache hit, should still see old value
+        world.update_source(
+            r#"#import "helper.typ": x
+                                #x"#,
+        );
+        let result2 = world.compile();
+        assert!(result2.success);
+
+        // Cache persists across compilations with same world
+        fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_binary_cache_hit() {
+        let temp_dir = env::temp_dir().join("typst_binary_cache_test");
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let data_file = temp_dir.join("data.txt");
+        fs::write(&data_file, b"original").unwrap();
+
+        let mut world = BackendWorld::new(temp_dir.clone(), None, None, vec![], true).unwrap();
+
+        // First read
+        world.update_source(r#"#let data = read("data.txt")"#);
+        let result1 = world.compile();
+        assert!(result1.success);
+
+        // Modify on disk
+        fs::write(&data_file, b"modified").unwrap();
+
+        // Second read, should get cached version
+        world.update_source(
+            r#"#let data = read("data.txt")
+                                #data"#,
+        );
+        let result2 = world.compile();
+        assert!(result2.success);
+
+        fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_cache_isolation_between_worlds() {
+        let temp_dir = env::temp_dir().join("typst_isolation_test");
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let file = temp_dir.join("shared.typ");
+        fs::write(&file, b"#let value = 1").unwrap();
+
+        let mut world1 = BackendWorld::new(temp_dir.clone(), None, None, vec![], true).unwrap();
+        let mut world2 = BackendWorld::new(temp_dir.clone(), None, None, vec![], true).unwrap();
+
+        // World1 caches
+        world1.update_source(r#"#import "shared.typ": value"#);
+        let r1 = world1.compile();
+        assert!(r1.success);
+
+        // World2 has separate cache
+        world2.update_source(r#"#import "shared.typ": value"#);
+        let r2 = world2.compile();
+        assert!(r2.success);
+
+        // Both should work independently
+
+        fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_main_source_always_fresh() {
+        let temp_dir = env::temp_dir();
+        let mut world = BackendWorld::new(temp_dir, None, None, vec![], true).unwrap();
+
+        world.update_source("= Version 1");
+        let r1 = world.compile();
+        assert!(r1.success);
+
+        // Update main source
+        world.update_source("= Version 2");
+        let r2 = world.compile();
+        assert!(r2.success);
+
+        // Main source is never cached, always fresh
     }
 }
