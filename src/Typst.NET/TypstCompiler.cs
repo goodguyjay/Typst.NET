@@ -56,7 +56,7 @@ public sealed class TypstCompiler : IDisposable
                 fixed (byte* rootPtr = rootBytes)
                 fixed (byte* inputsPtr = inputBytes.Length > 0 ? inputBytes : null)
                 fixed (byte* pkgPtr = packageBytes.Length > 0 ? packageBytes : null)
-                fixed (byte* fontsPtr = packageBytes.Length > 0 ? fontPathBytes : null)
+                fixed (byte* fontsPtr = fontPathBytes.Length > 0 ? fontPathBytes : null)
                 {
                     var nativeOptions = new CompilerOptions
                     {
