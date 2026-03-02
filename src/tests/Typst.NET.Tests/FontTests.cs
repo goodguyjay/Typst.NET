@@ -65,6 +65,30 @@ public sealed class FontTests : IDisposable
     }
 
     [Fact]
+    public void Compile_WithFontPath_UsesCustomFont()
+    {
+        // Arrange
+        const string fontDir = "TestAssets/OpenSans";
+
+        var options = new TypstCompilerOptions
+        {
+            WorkspaceRoot = _testDir,
+            CustomFontPaths = [fontDir],
+            IncludeSystemFonts = false,
+        };
+
+        using var compiler = new TypstCompiler(options);
+        const string source = """
+                              #text(font: "Open Sans", [Custom Font Is Used Test])
+                              """;
+        using var result = compiler.Compile(source);
+        
+        // Assert
+        Assert.True(result.Success);
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Fact]
     public void Compile_WithEmptyFontPaths_UsesSystemFonts()
     {
         // Arrange
